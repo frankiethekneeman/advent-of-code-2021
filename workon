@@ -1,0 +1,6 @@
+#!/bin/bash
+while vim -p $1/*.rs
+do
+    make $1/$2
+    read -p "><"
+done
