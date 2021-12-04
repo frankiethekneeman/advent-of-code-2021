@@ -16,26 +16,32 @@ fn main() {
                 .map(|t| format!("{}/{}.ie", DAY, t.0))
                 .map(operation)
         )
-        .map(|tuple| match tuple {
-            ((name, expected), result) => (*name, result
-                .and_then(|actual| if *expected == actual {
-                    return Ok(());
-                } else {
-                    return Err(format!("Expected {} but got {}", expected, actual));
-                }))
-        })
+        .map(|((name, expected), result)| 
+            (
+                *name,
+                result
+                    .and_then(|actual| if *expected == actual {
+                        return Ok(());
+                    } else {
+                        return Err(format!("Expected {} but got {}", expected, actual));
+                    })
+            )
+        )
         .collect::<Vec<(&str, Result<(), String>)>>();
     results.iter()
-        .for_each(|tuple| match tuple {
-            (name, Ok(())) => println!("Example {} passed.", name),
-            (name, Err(msg)) => println!("Example {} failed: {}.", name, msg)
+        .for_each(|(name, result)| match result {
+            Ok(()) => println!("Example {} passed.", name),
+            Err(msg) => println!("Example {} failed: {}.", name, msg)
         });
 
     if results.iter().any(|t| t.1.is_err()) {
         panic!("Please address errors before attempting the problem.")
     }
 
-    operation(format!("{}/input", DAY)).expect("Unexpected Error in main input.");
+    println!(
+        "{}",
+        operation(format!("{}/input", DAY)).expect("Unexpected Error in main input.")
+    );
 }
 
 fn error<T>(msg: &str) -> Result<T, String> {

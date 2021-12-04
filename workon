@@ -1,6 +1,8 @@
-#!/bin/bash
-while vim -p $1/*.rs
+#!/bin/bash -eux
+
+make $1/$2.rs
+while vim -p $1/$2.rs $1/{1..10}.ie
 do
-    make $1/$2
+    make $1/$2 || true
     read -p "><"
 done

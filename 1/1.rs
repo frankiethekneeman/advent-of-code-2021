@@ -14,16 +14,10 @@ fn count_increases(readings: Vec<i32> ) -> usize
 }
 
 fn parse_input(filename: &str) -> Vec<i32> {
-    match  fs::read_to_string(filename) {
-        Err(msg) => panic!("{}", msg),
-        Ok(contents) => {
-            return contents.lines()
-                .map(str::parse::<i32>)
-                .map(|result| match result {
-                    Err(msg) => panic!("{}", msg),
-                    Ok(n) => return n
-                })
-                .collect::<Vec<i32>>()
-        }
-    }
+    return fs::read_to_string(filename)
+        .expect("IO Error")
+        .lines()
+        .map(str::parse::<i32>)
+        .map(|result| result.expect("Parse Error"))
+        .collect()
 }

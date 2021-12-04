@@ -1,7 +1,12 @@
-HOPTS=-XUndecidableInstances -XFlexibleInstances -XTypeSynonymInstances -XMultiParamTypeClasses -XFunctionalDependencies -XTypeFamilies
-
 %: %.rxe
 	./$@.rxe
+
+%/1.rs:
+	mkdir -p $*
+	cp template.rs $@
+
+%/2.rs: | %/1.rs
+	cp $| $@
 
 .SECONDEXPANSION:
 .SECONDARY:
