@@ -18,6 +18,6 @@
 	curl https://adventofcode.com/2021/day/$*/input -H"Cookie: $$(cat .cookie)" > $@
 
 clean:
-	rm -rf clutter */*.hxe */input
+	rm -rf *.rxe */*.rxe */input
 
 all: $(foreach day,$(shell seq 1 24),$(foreach part,1 2,$(day)/$(part))) 25/1
