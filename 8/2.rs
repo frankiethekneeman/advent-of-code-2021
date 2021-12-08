@@ -47,9 +47,9 @@ fn main() {
     );
 }
 
-//fn error<T>(msg: &str) -> Result<T, String> {
-//    return Err(String::from(msg));
-//}
+fn error<T>(msg: &str) -> Result<T, String> {
+    return Err(String::from(msg));
+}
 
 fn operation(filename: String) -> Result<Solution, String> {
     return fs::read_to_string(filename)
@@ -104,16 +104,8 @@ fn parse(contents: String) -> Result<ParseTarget, String> {
         .collect::<Result<Vec<Display>, _>>()
         .map_err(|e| format!("Parse Error: {}", e));
 }
-/*
- 000
-1   2
-1   2
- 333
-4   5
-4   5
- 666
-*/
 
+//I stole this shit from github!  I can't even read it.
 macro_rules! collection {
     // map-like
     ($($k:expr => $v:expr),* $(,)?) => {{
@@ -127,8 +119,19 @@ macro_rules! collection {
     }};
 }
 
+type DigitLookup = Vec<(HashSet<char>, usize)>;
 
 fn solve(parsed: ParseTarget) -> Result<Solution, String> {
+
+    /*
+     000
+    1   2
+    1   2
+     333
+    4   5
+    4   5
+     666
+    */
 
     let num_patterns: HashMap<usize, HashSet<usize>> = collection!{ //Should be a const
         0 => collection!{0, 1, 2, 4, 5, 6},
@@ -143,54 +146,80 @@ fn solve(parsed: ParseTarget) -> Result<Solution, String> {
         9 => collection!{0, 1, 2, 3, 5, 6}
     };
 
-    let configurations = permutations(collection!{'a', 'b', 'c', 'd', 'e', 'f', 'g'});
-    
-    let lookups: Vec<Vec<(HashSet<char>, usize)>> = configurations.into_iter()
+    let lookups = permutations(collection!{'a', 'b', 'c', 'd', 'e', 'f', 'g'})
+        .into_iter()
         .map(|c| num_patterns.iter()
             .map(|(n, wires)| 
                 (
                     wires.iter().map(|w| c[*w]).collect(),
                     *n
                 )
-            ).collect()
-        ).collect();
+            ).collect::<DigitLookup>()
+        ).collect::<Vec<DigitLookup>>();
 
-    return Ok(parsed.iter()
-        .map(|display| (display, lookups.iter()
-            .filter(|l| sane(&display.signal_patterns, l))
-            .find(|l| sane(&display.output, l))
-            .unwrap())
-        ).map(|(display, lookup)| decode(&display.output, lookup))
-        .sum()
-        );
+    return parsed.into_iter()
+        .map(|display| -> Result<(Display, DigitLookup), String> {
+            let matching = lookups.iter()
+              .filter(|l| sane(&display.signal_patterns, l))
+              .filter(|l| sane(&display.output, l))
+              .collect::<Vec<&DigitLookup>>();
+            
+            if matching.len() == 0 {
+                return error("No sane configurations.");
+            } else if matching.len() > 1 {
+                return error("Sane configuration non-unique.");
+            }
+            return Ok((display, matching[0].clone()));
+        })
+        .collect::<Result<Vec<(Display, DigitLookup)>, String>>()
+        .and_then(|lookups| lookups.into_iter()
+            .map(|(display, lookup)| decode(&display.output, &lookup))
+            .collect::<Result<Vec<usize>, String>>()
+        ).map(|values| values.iter().sum());
+}
+fn one<T: Clone>(v: Vec<T>) -> Result<T, String> {
+    if v.len() == 0 {
+        return error("Expected exactly one item, but found none.");
+    } else if v.len() > 1 {
+        return error("Expected exactly one item, but found many");
+    }
+    return Ok(v[0].clone())
 }
 
-fn sane(nums: &Vec<Digit>, lookup: &Vec<(HashSet<char>, usize)>) -> bool {
+fn sane(nums: &Vec<Digit>, lookup: &DigitLookup) -> bool {
     return nums.iter()
         .all(|digit| lookup.iter()
             .any(|(display, _)| *display == digit.wires)
         );
 }
 
-fn decode(nums: &Vec<Digit>, lookup: &Vec<(HashSet<char>, usize)>) -> usize {
-    let visual: String = nums.iter().map(|digit| lookup.iter()
-        .find(|(display, _)| *display == digit.wires)
-        .map(|(_, val)| format!("{}", val))
-        .unwrap()
-    ).collect();
+fn decode(nums: &Vec<Digit>, lookup: &DigitLookup) -> Result<usize, String> {
+    let visual: String = nums.iter()
+        .map(|digit| {
+            let result = one(lookup.iter()
+            .filter(|(display, _)| *display == digit.wires)
+            .collect())?;
+            
+            return Ok(result.1.to_string())
+        }).collect::<Result<String, String>>()?;
 
-    return visual.parse().expect("This can probably never fail.");
+    return visual.parse()
+        .map_err(|e| format!("Final Parse error: {}", e));
 }
+
 fn permutations<T>(set: HashSet<T>) -> HashSet<Vec<T>>
     where T: Eq + Hash + Clone
 {
     if set.len() == 0 {
         return collection!{Vec::new()};
     }
-    //println!("{}", set.len());
+
     return set.clone().into_iter()
         .flat_map(|i| permutations(
-                set.clone().into_iter().filter(|j| i != *j).collect()
+                set.clone()
+                    .into_iter()
+                    .filter(|j| i != *j)
+                    .collect()
             ).into_iter()
             .map(move |perm| {
                 let mut result = perm.clone();
@@ -199,4 +228,3 @@ fn permutations<T>(set: HashSet<T>) -> HashSet<Vec<T>>
             })
         ).collect();
 }
-
