@@ -114,8 +114,20 @@ const LENGTH_LOOKUPS: [(usize, usize); 4] = [
     (3, 7),
     (7, 8)
 ];
+ 
+type SolvedSignals<'a> = HashMap<usize, &'a HashSet<char>>;
 
 fn solve(parsed: ParseTarget) -> Result<Solution, String> {
+
+    let outputs = parsed.iter()
+        .map(|d| decode(&d.output, &build_lookup(&d.signal_patterns)?))
+        .collect::<Result<Vec<usize>, String>>()?;
+    return Ok(outputs
+        .into_iter()
+        .sum::<usize>());
+}
+
+fn build_lookup(signals: &Vec<Digit>) -> Result<DigitLookup, String> {
     let l5_lookups: [(usize, Vec<usize>, usize); 3] = [
         (8, vec![4, 7], 2),
         (7, Vec::new(), 3),
@@ -128,72 +140,63 @@ fn solve(parsed: ParseTarget) -> Result<Solution, String> {
         (8, vec![4], 9)
     ];
 
-    let outputs = parsed.iter()
-        .map(|d| -> Result<(&Display, DigitLookup), String> {
-            let base_sets = LENGTH_LOOKUPS.iter()
-                .map(|(length, val)| {
-                    let found =one(d.signal_patterns
-                        .iter()
-                        .filter(|s| s.wires.len() == *length)
-                        .collect()
-                    )?;
-                    return Ok((*val, &found.wires));
-                }).collect::<Result<HashMap<usize, &HashSet<char>>, String>>()?;
-            let fives = d.signal_patterns
-                .iter()
-                .filter(|s| s.wires.len() == 5)
-                .map(|s| {
-                    one(l5_lookups.iter()
-                        .filter(|(starter, to_remove, _)| {
-                            let base = base_sets.get(starter).unwrap(); //guaranteed to be there
-                            let removal_set = to_remove.iter()
-                                .map(|n| base_sets.get(n).unwrap())
-                                .fold(HashSet::new(), |acc, s| acc.union(s)
-                                    .map(|c| *c)
-                                    .collect()
-                                );
-                            let indicator: HashSet<char> = base.difference(&removal_set)
-                                .map(|c| *c)
-                                .collect();
+    let base_sets = lookup_length_based_identities(signals)?;
+    let fives = signals.iter()
+        .filter(|s| s.wires.len() == 5)
+        .map(|s| {
+            one(l5_lookups.iter()
+                .filter(|(starter, to_remove, _)|
+                    build_indicator(&base_sets, starter, to_remove).is_subset(&s.wires)
+                ).map(|(_, _, val)| (*val, &s.wires)) 
+                .collect()
+            )
+        }).collect::<Result<SolvedSignals, String>>()?;
+    let sixes = signals.iter()
+        .filter(|s| s.wires.len() == 6)
+        .map(|s| {
+            one(l6_lookups.iter()
+                .filter(|(starter, to_remove, _)|
+                    ! build_indicator(&base_sets, starter, to_remove).is_subset(&s.wires)
+                ).map(|(_, _, val)| (*val, &s.wires)) 
+                .collect()
+            )
+        }).collect::<Result<SolvedSignals, String>>()?;
 
-                            return indicator.is_subset(&s.wires);
-                        }).map(|(_, _, val)| (*val, &s.wires)) 
-                        .collect()
-                    )
-                }).collect::<Result<HashMap<usize, &HashSet<char>>, String>>()?;
-            let sixes = d.signal_patterns
-                .iter()
-                .filter(|s| s.wires.len() == 6)
-                .map(|s| {
-                    one(l6_lookups.iter()
-                        .filter(|(starter, to_remove, _)| {
-                            let base = base_sets.get(starter).unwrap(); //guaranteed to be there
-                            let removal_set = to_remove.iter()
-                                .map(|n| base_sets.get(n).unwrap())
-                                .fold(HashSet::new(), |acc, s| acc.union(s)
-                                    .map(|c| *c)
-                                    .collect()
-                                );
-                            let indicator: HashSet<char> = base.difference(&removal_set)
-                                .map(|c| *c)
-                                .collect();
+    return Ok(base_sets.into_iter().chain(fives).chain(sixes)
+        .map(|(n, set)| (set.clone(), n))
+        .collect());
 
-                            return !indicator.is_subset(&s.wires);
-                        }).map(|(_, _, val)| (*val, &s.wires)) 
-                        .collect()
-                    )
-                }).collect::<Result<HashMap<usize, &HashSet<char>>, String>>()?;
-            let lookup = base_sets.into_iter().chain(fives).chain(sixes)
-                .map(|(n, set)| (set.clone(), n))
-                .collect();
-        
-            return Ok((d, lookup))
-        })
-        .map(|r| r.and_then(|(d, lookup)| decode(&d.output, &lookup)))
-        .collect::<Result<Vec<usize>, String>>()?;
-    return Ok(outputs
-        .into_iter()
-        .sum::<usize>());
+}
+
+fn lookup_length_based_identities(signals: &Vec<Digit>)
+    -> Result<SolvedSignals, String>
+{
+    return LENGTH_LOOKUPS.iter()
+        .map(|(length, val)| {
+            let found =one(signals
+                .iter()
+                .filter(|s| s.wires.len() == *length)
+                .collect()
+            )?;
+            return Ok((*val, &found.wires));
+        }).collect::<Result<HashMap<usize, &HashSet<char>>, String>>();
+}
+
+fn build_indicator(
+    base_sets: &HashMap<usize, &HashSet<char>>,
+    starter: &usize,
+    to_remove: &Vec<usize>
+) -> HashSet<char> {
+    let base = base_sets.get(starter).unwrap(); //guaranteed to be there
+    let removal_set = to_remove.iter()
+        .map(|n| base_sets.get(n).unwrap())
+        .fold(HashSet::new(), |acc, s| acc.union(s)
+            .map(|c| *c)
+            .collect()
+        );
+    return base.difference(&removal_set)
+        .map(|c| *c)
+        .collect();
 }
 
 fn one<T: Clone>(v: Vec<T>) -> Result<T, String> {
@@ -219,4 +222,3 @@ fn decode(nums: &Vec<Digit>, lookup: &DigitLookup) -> Result<usize, String> {
     return visual.parse()
         .map_err(|e| format!("Final Parse error: {}", e));
 }
-
