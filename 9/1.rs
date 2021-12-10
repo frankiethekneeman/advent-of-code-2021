@@ -1,13 +1,14 @@
 use std::fs;
+use std::convert::TryFrom;
 
-type ParseTarget = Vec<i32>;
+type ParseTarget = Vec<Vec<usize>>;
 type Solution = usize;
 
 const EXAMPLES: [(&str, Solution); 1] = [
-    ("1", 150)
+    ("1", 15)
 ];
 
-const DAY: u8 = 1;
+const DAY: u8 = 9;
 
 fn main() {
     let results = EXAMPLES.iter()
@@ -44,9 +45,9 @@ fn main() {
     );
 }
 
-fn error<T>(msg: &str) -> Result<T, String> {
-    return Err(String::from(msg));
-}
+//fn error<T>(msg: &str) -> Result<T, String> {
+//    return Err(String::from(msg));
+//}
 
 fn operation(filename: String) -> Result<Solution, String> {
     return fs::read_to_string(filename)
@@ -56,9 +57,38 @@ fn operation(filename: String) -> Result<Solution, String> {
 }
 
 fn parse(contents: String) -> Result<ParseTarget, String> {
-    return error("Parse Not Yet Implemented");
+    return contents.lines()
+        .into_iter()
+        .map(str::chars)
+        .map(|row| row.map(|c| c.to_digit(10)
+            .map(usize::try_from)
+            .unwrap()
+            .map_err(|e| format!("{}", e))
+        ))
+        .map(Iterator::collect)
+        .collect();
 }
 
 fn solve(parsed: ParseTarget) -> Result<Solution, String> {
-    return error("Solve Not Yet Implemented");
+    return Ok(parsed.iter()
+        .enumerate()
+        .map(|(x, row)| row.iter()
+                .enumerate()
+                .filter(|(y, height)| {
+                    let up = *parsed.get(x.overflowing_sub(1).0)
+                        .and_then(|r| r.get(*y))
+                        .unwrap_or(&10);
+                    let down = *parsed.get(x + 1)
+                        .and_then(|r| r.get(*y))
+                        .unwrap_or(&10);
+                    let left = *row.get(y.overflowing_sub(1).0)
+                        .unwrap_or(&10);
+                    let right = *row.get(y + 1)
+                        .unwrap_or(&10);
+                    return [up, down, left, right].iter()
+                        .all(|n| n > height);
+                })
+                .map(|(_, height)| *height + 1)
+                .sum::<usize>()
+        ).sum::<usize>());
 }
