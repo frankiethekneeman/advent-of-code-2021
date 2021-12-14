@@ -89,20 +89,17 @@ enum Twople<T> {
 
 struct TwopleWindows<'a, T: Copy, I: Iterator<Item=T>> {
     done: bool,
-    prev: T,
+    prev: Option<T>,
     backer: &'a mut I
 }
 
 impl<'a, T: Copy, I: Iterator<Item=T>> TwopleWindows<'a, T, I> {
-    fn new(backer: &'a mut I) -> Result<TwopleWindows<'a, T, I>, String> {
-        let first = backer.next()
-            .ok_or("Empty iterator can have no windows.")?;
-
-        return Ok(TwopleWindows {
+    fn new(backer: &'a mut I) -> TwopleWindows<'a, T, I> {
+        return TwopleWindows {
             done: false,
-            prev: first,
+            prev: None,
             backer: backer
-        });
+        };
     }
 }
 
@@ -112,10 +109,10 @@ impl<'a, T: Copy, I: Iterator<Item=T>> Iterator for TwopleWindows<'a, T, I> {
         if self.done {
             return None;
         }
-        let first = self.prev;
+        let first = self.prev.or_else(|| self.backer.next())?;
         match self.backer.next() {
             Some(second) => {
-                self.prev = second;
+                self.prev = Some(second);
                 return Some(Twople::Pair(first, second));
             }
             None => {
@@ -128,7 +125,7 @@ impl<'a, T: Copy, I: Iterator<Item=T>> Iterator for TwopleWindows<'a, T, I> {
 
 fn solve(parsed: ParseTarget) -> Result<Solution, String> {
     let (template, rules) = parsed;
-    let result = inject(&mut template.into_iter(), &rules, 10)?;
+    let result = inject(&mut template.into_iter(), &rules, 10);
     let mut counts: HashMap<char, usize> = HashMap::new(); 
     for c in result.iter() {
         counts.insert(
@@ -140,14 +137,14 @@ fn solve(parsed: ParseTarget) -> Result<Solution, String> {
     return error("Solve Not Yet Implemented");
 }
 
-fn inject<T: Iterator<Item=char>>(elements: &mut T, rules: &HashMap<(char, char), char>, n: usize)
--> Result<Vec<char>, String> {
+fn inject<T>(elements: &mut T, rules: &HashMap<(char, char), char>, n: u8) -> Vec<char>
+where T: Iterator<Item = char>
+{
     if n == 0 {
-        return Ok(elements.collect());
+        return elements.collect();
     }
-    println!("{}", n);
-    let mut iter = TwopleWindows::new(elements)?
-        .flat_map(move |t| match t {
+    let mut iter = TwopleWindows::new(elements)
+        .flat_map(|t| match t {
             Twople::Pair(l, r) => match rules.get(&(l, r)) {
                 Some(i) => vec![l, *i],
                 None => vec![l]
