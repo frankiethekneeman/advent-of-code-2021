@@ -133,8 +133,10 @@ fn solve(parsed: ParseTarget) -> Result<Solution, String> {
             *counts.get(c).unwrap_or(&0) + 1
         );
     }
-    println!("Done?");
-    return error("Solve Not Yet Implemented");
+
+    let max = counts.values().max().ok_or("No maximum".to_string())?;
+    let min = counts.values().min().ok_or("No minimum".to_string())?;
+    return Ok(*max - *min);
 }
 
 fn inject<T>(elements: &mut T, rules: &HashMap<(char, char), char>, n: u8) -> Vec<char>
