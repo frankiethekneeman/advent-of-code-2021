@@ -87,14 +87,14 @@ enum Twople<T> {
     Last(T)
 }
 
-struct TwopleWindows<'a, T: Copy, I: Iterator<Item=T>> {
+struct TwopleWindows<T: Copy, I: Iterator<Item=T>> {
     done: bool,
     prev: Option<T>,
-    backer: &'a mut I
+    backer: I
 }
 
-impl<'a, T: Copy, I: Iterator<Item=T>> TwopleWindows<'a, T, I> {
-    fn new(backer: &'a mut I) -> TwopleWindows<'a, T, I> {
+impl<T: Copy, I: Iterator<Item=T>> TwopleWindows<T, I> {
+    fn new(backer: I) -> TwopleWindows<T, I> {
         return TwopleWindows {
             done: false,
             prev: None,
@@ -103,7 +103,7 @@ impl<'a, T: Copy, I: Iterator<Item=T>> TwopleWindows<'a, T, I> {
     }
 }
 
-impl<'a, T: Copy, I: Iterator<Item=T>> Iterator for TwopleWindows<'a, T, I> {
+impl<T: Copy, I: Iterator<Item=T>> Iterator for TwopleWindows<T, I> {
     type Item = Twople<T>;
     fn next(&mut self) -> Option<Twople<T>> {
         if self.done {
@@ -139,7 +139,7 @@ fn solve(parsed: ParseTarget) -> Result<Solution, String> {
     return Ok(*max - *min);
 }
 
-fn inject<T>(elements: &mut T, rules: &HashMap<(char, char), char>, n: u8) -> Vec<char>
+fn inject<T>(elements: T, rules: &HashMap<(char, char), char>, n: u8) -> Vec<char>
 where T: Iterator<Item = char>
 {
     if n == 0 {
@@ -154,5 +154,5 @@ where T: Iterator<Item = char>
             Twople::Last(last) => vec![last]
         });
 
-    return inject(&mut iter, rules, n - 1);
+    return inject(&mut iter as &mut dyn Iterator<Item=char>, rules, n - 1);
 }
