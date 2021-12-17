@@ -1,4 +1,6 @@
-%: %.rxe
+.SECONDEXPANSION:
+.SECONDARY:
+%: %.rxe $$(@D)/input
 	./$@.rxe
 
 %/1.rs:
@@ -8,9 +10,7 @@
 %/2.rs: | %/1.rs
 	cp $| $@
 
-.SECONDEXPANSION:
-.SECONDARY:
-%.rxe: %.rs $$(@D)/input
+%.rxe: %.rs 
 	rustc -o $@ $<
 
 %/input: .cookie
