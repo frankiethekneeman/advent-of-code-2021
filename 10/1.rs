@@ -44,9 +44,9 @@ fn main() {
     );
 }
 
-fn error<T>(msg: &str) -> Result<T, String> {
-    return Err(String::from(msg));
-}
+//fn error<T>(msg: &str) -> Result<T, String> {
+//    return Err(String::from(msg));
+//}
 
 fn operation(filename: String) -> Result<Solution, String> {
     return fs::read_to_string(filename)
