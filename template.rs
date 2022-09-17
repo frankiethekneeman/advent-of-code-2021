@@ -1,7 +1,9 @@
 use std::fs;
+use std::error::Error;
 
 type ParseTarget = Vec<i32>;
 type Solution = usize;
+type AoC<T> = Result<T, Box<dyn Error>>;
 
 const EXAMPLES: [(&str, Solution); 1] = [
     ("1", 150)
@@ -23,11 +25,11 @@ fn main() {
                     .and_then(|actual| if *expected == actual {
                         return Ok(());
                     } else {
-                        return Err(format!("Expected {} but got {}", expected, actual));
+                        return error(format!("Expected {} but got {}", expected, actual));
                     })
             )
         )
-        .collect::<Vec<(&str, Result<(), String>)>>();
+        .collect::<Vec<(&str, AoC<()>)>>();
     results.iter()
         .for_each(|(name, result)| match result {
             Ok(()) => println!("Example {} passed.", name),
@@ -44,21 +46,25 @@ fn main() {
     );
 }
 
-fn error<T>(msg: &str) -> Result<T, String> {
-    return Err(String::from(msg));
+fn errorize<S: Into<Box<dyn Error>>>(msg: S) -> Box<dyn Error> {
+    return msg.into();
 }
 
-fn operation(filename: String) -> Result<Solution, String> {
+fn error<T, S: Into<Box<dyn Error>>>(err: S) -> AoC<T> {
+    return Err(err.into());
+}
+
+fn operation(filename: String) -> AoC<Solution> {
     return fs::read_to_string(filename)
-        .map_err(|io_error| format!("{}", io_error))
+        .map_err(errorize)
         .and_then(parse)
         .and_then(solve);
 }
 
-fn parse(contents: String) -> Result<ParseTarget, String> {
+fn parse(contents: String) -> AoC<ParseTarget> {
     return error("Parse Not Yet Implemented");
 }
 
-fn solve(parsed: ParseTarget) -> Result<Solution, String> {
+fn solve(parsed: ParseTarget) -> AoC<Solution> {
     return error("Solve Not Yet Implemented");
 }
