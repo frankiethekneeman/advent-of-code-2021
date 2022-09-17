@@ -2,9 +2,11 @@ use std::fs;
 use std::cmp::max;
 use std::cmp::min;
 use std::convert::TryInto;
+use std::error::Error;
 
 type ParseTarget = Vec<Command>;
 type Solution = usize;
+type AoC<T> = Result<T, Box<dyn Error>>;
 
 const EXAMPLES: [(&str, Solution); 3] = [
     ("1", 39),
@@ -26,13 +28,13 @@ fn main() {
                 *name,
                 result
                     .and_then(|actual| if *expected == actual {
-                        return Ok(());
+                        Ok(())
                     } else {
-                        return Err(format!("Expected {} but got {}", expected, actual));
+                        error(format!("Expected {} but got {}", expected, actual))
                     })
             )
         )
-        .collect::<Vec<(&str, Result<(), String>)>>();
+        .collect::<Vec<(&str, AoC<()>)>>();
     results.iter()
         .for_each(|(name, result)| match result {
             Ok(()) => println!("Example {} passed.", name),
@@ -49,13 +51,17 @@ fn main() {
     );
 }
 
-// fn error<T>(msg: &str) -> Result<T, String> {
-//     return Err(String::from(msg));
-// }
+fn errorize<S: Into<Box<dyn Error>>>(msg: S) -> Box<dyn Error> {
+    return msg.into();
+}
 
-fn operation(filename: String) -> Result<Solution, String> {
+fn error<T, S: Into<Box<dyn Error>>>(err: S) -> AoC<T> {
+    return Err(err.into());
+}
+
+fn operation(filename: String) -> AoC<Solution> {
     return fs::read_to_string(filename)
-        .map_err(|io_error| format!("{}", io_error))
+        .map_err(errorize)
         .and_then(parse)
         .and_then(solve);
 }
@@ -67,52 +73,54 @@ struct Command {
 }
 
 impl Command {
-    fn from_input(line: &str) -> Result<Command, String> {
+    fn from_input(line: &str) -> AoC<Command> {
         let mut bits = line.split(&[' ', ','][..]);
         let on = bits.next()
-            .ok_or(String::from("No on/off"))
+            .ok_or(errorize("No on/off"))
             .and_then(|on| match on {
                 "on" => Ok(true),
                 "off" => Ok(false),
-                other => Err(format!("Unrecognized on/off: '{}'", other))
+                other => error(format!("Unrecognized on/off: '{}'", other))
             })?;
-        let x = bits.next()
-            .ok_or(String::from("insufficient segments for x range."))
-            .and_then(|s| parse_range("x=", s))?;
-        let y = bits.next()
-            .ok_or(String::from("insufficient segments for y range."))
-            .and_then(|s| parse_range("y=", s))?;
-        let z = bits.next()
-            .ok_or(String::from("insufficient segments for z range."))
-            .and_then(|s| parse_range("z=", s))?;
-        return Ok(Command {
-            on: on,
-            points: Points {
-                xs: x,
-                ys: y,
-                zs: z
-            }
-        })
+        let range_strs: Vec<&str> = bits.take(3).collect();
+        if range_strs.len() != 3 {
+            return error(format!("Unexpected number of ranges: {}", range_strs.len()));
+        }
+
+        let ranges = range_strs.iter().zip(["x=", "y=", "z="])
+            .map(|(string, prefix)| parse_range(prefix, string))
+            .collect::<AoC<Vec<Range>>>()?;
+        return match &ranges[..] {
+            [x, y, z] => Ok(Command {
+                on: on,
+                points: Points {
+                    xs: x.clone(),
+                    ys: y.clone(),
+                    zs: z.clone()
+                }
+            }),
+            _ => error("I don't know how this happened"),
+        }
     }
 }
 
-fn parse_range(prefix: &str, line: &str) -> Result<Range, String> {
+fn parse_range(prefix: &str, line: &str) -> AoC<Range> {
     let bounds = line.strip_prefix(prefix)
-        .ok_or(format!("Expected prefix '{}' on '{}'", prefix, line))
+        .ok_or(errorize(format!("Expected prefix '{}' on '{}'", prefix, line)))
         .and_then(|rest| rest.split("..")
             .map(str::parse)
             .collect::<Result<Vec<isize>, _>>()
-            .map_err(|e| format!("{}", e))
+            .map_err(errorize)
         )?;
 
     if bounds.len() == 2 {
         return Ok(Range::new(bounds[0], bounds[1]))
     }
 
-    return Err(format!("Got the wrong number of bounds from '{}'.", line));
+    return error(format!("Got the wrong number of bounds from '{}'.", line));
 }
 
-fn parse(contents: String) -> Result<ParseTarget, String> {
+fn parse(contents: String) -> AoC<ParseTarget> {
     return contents.lines()
         .map(Command::from_input)
         .collect();
@@ -147,13 +155,17 @@ impl Points {
             zs: self.zs.intersection(&other.zs)
         };
 
-        return self.xs.partition(&other.xs).iter().flat_map(|xs| 
-            self.ys.partition(&other.ys).iter().flat_map(move |ys|
-                self.zs.partition(&other.zs).iter().map(move |zs|
+        let xparts = &self.xs.partition(&other.xs);
+        let yparts = &self.ys.partition(&other.ys);
+        let zparts = &self.zs.partition(&other.zs);
+
+        return xparts.iter().flat_map(|xs| 
+            yparts.iter().flat_map(move |ys|
+                zparts.iter().map(move |zs|
                     Points{xs: xs.clone(), ys: ys.clone(), zs: zs.clone()}
-                ).collect::<Vec<Points>>()
-            ).collect::<Vec<Points>>()
-        ).filter(|p: &Points| p.xs.size() > 0 && p.ys.size() > 0 && p.zs.size() > 0)
+                )
+            )
+        ).filter(|p| p.size() > 0 )
         .filter(|p| *p != overlap_points)
         .collect();
         
@@ -187,8 +199,7 @@ impl Range {
 
     fn intersection(&self, other: &Range) -> Range {
         return match (self, other) {
-            (Range::Empty, _) => Range::Empty,
-            (_, Range::Empty) => Range::Empty,
+            (Range::Empty, _) | (_, Range::Empty) => Range::Empty,
             (Range::Inclusive{bottom: sbottom, top: stop}, Range::Inclusive{bottom: obottom, top: otop}) => 
                 if *stop < *obottom || *sbottom > *otop {
                     Range::Empty // disjoint!
@@ -207,15 +218,12 @@ impl Range {
      *  _in_ the other range, and what portion is _after_ the other range.
      */
     fn partition(&self, other: &Range) -> [Range; 3] {
-        match (self, other) {
-            (Range::Empty, _) => return [Range::Empty, Range::Empty, Range::Empty],
-            (_, Range::Empty) => return [self.clone(), Range::Empty, Range::Empty],
+        return match (self, other) {
+            (Range::Empty, _) => [Range::Empty, Range::Empty, Range::Empty],
+            (_, Range::Empty) => [self.clone(), Range::Empty, Range::Empty],
             (Range::Inclusive{bottom: sbottom, top: stop}, Range::Inclusive{bottom: obottom, top: otop}) => {
                 let before = if *sbottom < *obottom {
-                    Range::Inclusive{
-                        bottom: *sbottom,
-                        top: min(*stop, *obottom - 1)
-                    }
+                    Range::Inclusive{ bottom: *sbottom, top: min(*stop, *obottom - 1) }
                 } else {
                     Range::Empty
                 };
@@ -228,7 +236,7 @@ impl Range {
                     Range::Empty
                 };
 
-                return [before, concurrent, after];
+                [before, concurrent, after]
             }
         }
     }
@@ -249,6 +257,7 @@ impl Field {
             .map(|p| p.size())
             .sum()
     }
+
     fn update(self, command: Command) -> Field {
         let mut points = self.on.into_iter()
             .flat_map(|p| p.without(&command.points))
@@ -260,8 +269,8 @@ impl Field {
     }
 }
 
-fn solve(parsed: ParseTarget) -> Result<Solution, String> {
+fn solve(parsed: ParseTarget) -> AoC<Solution> {
     return Ok(parsed.into_iter()
-        .fold(Field::new(), |f, c| f.update(c))
+        .fold(Field::new(), Field::update)
         .size());
 }
